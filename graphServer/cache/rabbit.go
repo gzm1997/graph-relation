@@ -11,7 +11,7 @@ import (
 
 var conn *amqp.Connection
 var ch *amqp.Channel
-var queue amqp.Queue
+
 
 const EXCHANGE = "cayleyExchange"
 

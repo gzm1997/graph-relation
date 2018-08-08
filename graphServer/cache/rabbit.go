@@ -16,21 +16,22 @@ var queue amqp.Queue
 const EXCHANGE = "cayleyExchange"
 
 func init() {
+	//加载rabbitMQ在配置文件中的配置
 	rabbitUser := beego.AppConfig.String("rabbitUser")
 	rabbitPsw := beego.AppConfig.String("rabbitPsw")
 	rabbitIp := beego.AppConfig.String("rabbitIp")
 	rabbitPort, _ := beego.AppConfig.Int("rabbitPort")
 	dbUrl := fmt.Sprintf("amqp://%s:%s@%s:%d/", rabbitUser, rabbitPsw, rabbitIp, rabbitPort)
-	//fmt.Println("dbUrl", dbUrl)
 	var err error
+	//建立链接
 	if conn, err = amqp.Dial(dbUrl); err != nil {
 		panic(err)
 	}
-	//defer conn.Close()
+	//声明一个channel
 	if ch, err = conn.Channel(); err != nil {
 		panic(err)
 	}
-	//defer ch.Close()
+	//声明一个类型为direct的交换区
 	err = ch.ExchangeDeclare(
 		EXCHANGE,
 		"direct",
@@ -43,17 +44,20 @@ func init() {
 	if err != nil {
 		panic(nil)
 	}
-	//fmt.Println("laalllalaall")
 }
 
 func PublishMsg(json []byte, bingdingKey BindingKey) error {
 	err := ch.Publish(
+		//指定我们要使用的direct类型的交换区
 		EXCHANGE,
+		//根据bingdingKey进行转发
 		bingdingKey.String(),
 		false,
 		false,
 		amqp.Publishing{
+			//发送的信息时候持久的 即使发送方突然挂了 重启之后还会继续发
 			DeliveryMode: amqp.Persistent,
+			//发送的类型是json对象
 			ContentType: "application/json",
 			Body: json,
 		})
@@ -61,15 +65,17 @@ func PublishMsg(json []byte, bingdingKey BindingKey) error {
 }
 
 func GetMsg() {
+	//在这里释放rabbit的资源
 	defer conn.Close()
 	defer ch.Close()
 	forever := make(chan bool)
 	for _, bingdingKey := range AllBindingKeys {
 		go func(b BindingKey) {
 			fmt.Println("queue for", b)
+			//声明一个匿名队列
 			q, err := ch.QueueDeclare(
 				"",
-				false,
+				true,
 				false,
 				true,
 				false,
@@ -78,7 +84,7 @@ func GetMsg() {
 			if err != nil {
 				panic(err)
 			}
-
+			//进行队列绑定
 			err = ch.QueueBind(
 				q.Name,
 				b.String(),
@@ -88,7 +94,7 @@ func GetMsg() {
 			if err != nil {
 				panic(err)
 			}
-
+			//声明一个消费者 从这个匿名队列里面读取信息
 			msgs, err := ch.Consume(
 				q.Name, // queue
 				"",     // consumer
